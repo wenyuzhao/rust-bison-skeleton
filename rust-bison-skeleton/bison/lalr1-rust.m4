@@ -108,14 +108,27 @@ b4_identification[]
 [
 fn make_yylloc(rhs: &YYStack, n: usize) -> YYLoc {
     if 0 < n {
-        YYLoc {
-            begin: rhs.location_at(n - 1).begin,
-            end: rhs.location_at(0).end
+        let mut begin = usize::MAX;
+        for i in (0..n).rev() {
+            let b = rhs.location_at(i).begin;
+            if b != usize::MAX {
+                begin = b;
+                break;
+            }
         }
+        let mut end = usize::MAX;
+        for i in 0..n {
+            let e = rhs.location_at(i).end;
+            if e != usize::MAX {
+                end = e;
+                break;
+            }
+        }
+        YYLoc { begin, end }
     } else {
         YYLoc {
-            begin: rhs.location_at(0).end,
-            end: rhs.location_at(0).end
+            begin: usize::MAX,
+            end: usize::MAX
         }
     }
 }
@@ -196,7 +209,7 @@ impl YYStack {
 
     pub(crate) fn owned_value_at(&mut self, i: usize) -> YYValue {
         let len = self.len();
-        std::mem::take(&mut self.stack[len - 1 - i].value)
+        self.stack[len - 1 - i].value.take_or_copy()
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -258,6 +271,7 @@ impl]b4_parser_generic[ ]b4_parser_struct[]b4_parser_generic[ {
         Self::yydefgoto_[idx]
     }
 
+    #@{allow(unused_mut, unused_variables, unused_assignments, unreachable_code)@}
     fn yyaction(&mut self, yyn: i32, yystack: &mut YYStack, yylen: &mut usize) -> Result<i32, ()> {
         // If YYLEN is nonzero, implement the default value of the action:
         // '$$ = $1'.  Otherwise, use the top of the stack.
@@ -266,14 +280,18 @@ impl]b4_parser_generic[ ]b4_parser_struct[]b4_parser_generic[ {
         // This behavior is undocumented and Bison
         // users should not rely upon it.
         #@{allow(unused_assignments)@}
-        let mut yyval: YYValue = YYValue::new_uninitialized();
-        let yyloc: YYLoc = make_yylloc(yystack, *yylen);
+        let mut yyval: YYValue = YYValue::default();
+        #@{allow(unused_mut)@} let mut yyloc: YYLoc = make_yylloc(yystack, *yylen);
 
         self.yy_reduce_print(yyn, yystack);
 
         match yyn {
             ]b4_user_actions[
-            _ => {}
+            _ => {
+                if *yylen > 0 {
+                    yyval = yystack.owned_value_at(*yylen - 1);
+                }
+            }
         }
 
         assert!(

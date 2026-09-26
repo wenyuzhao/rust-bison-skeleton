@@ -285,8 +285,15 @@ b4_symbol_foreach([b4_symbol_enum])
 # -----------------------------
 # We need to fool Rust's stupid unreachable code detection.
 m4_define([b4_case],
-[  $1 => m4_ifval([$3], [ b4_comment([$3])])
-  $2,
+[m4_divert_push([-1])$2[]m4_divert_pop([-1])dnl
+  $1 => m4_ifval([$3], [ b4_comment([$3])])
+  {
+      m4_ifdef([b4_current_lhs_type],
+               [let mut yyval_typed: b4_current_lhs_type = Default::default();])
+  $2
+      m4_ifdef([b4_current_lhs_type],
+               [yyval = YYValue::from(yyval_typed);[]m4_undefine([b4_current_lhs_type])])
+  },
 ])
 
 
@@ -383,7 +390,18 @@ m4_define([b4_symbol_value],
 # b4_lhs_value([SYMBOL-NUM], [TYPE])
 # ----------------------------------
 # See README.
-m4_define([b4_lhs_value], [yyval])
+m4_define([b4_lhs_value],
+[m4_ifval([$2],
+          [m4_if([$2], b4_yystype,
+                 [yyval],
+                 [m4_define([b4_current_lhs_type], [$2])[]yyval_typed])],
+          [m4_ifval([$1],
+                    [b4_symbol_if([$1], [has_type],
+                                  [m4_if(b4_symbol([$1], [type]), b4_yystype,
+                                         [yyval],
+                                         [m4_define([b4_current_lhs_type], b4_symbol([$1], [type]))[]yyval_typed])],
+                                  [yyval])],
+                    [yyval])])])
 
 
 # b4_rhs_data(RULE-LENGTH, POS)
@@ -400,8 +418,12 @@ m4_define([b4_rhs_data],
 # between the angle brackets.
 m4_define([b4_rhs_value],
 [m4_ifval([$4],
-          [ $4::from(b4_rhs_data([$1], [$2]))],
-          [ b4_rhs_data([$1], [$2])])])
+          [ <$4>::from(b4_rhs_data([$1], [$2]))],
+          [b4_symbol_if([$3], [has_type],
+                        [m4_if(b4_symbol([$3], [type]), b4_yystype,
+                               [ b4_rhs_data([$1], [$2])],
+                               [ <b4_symbol([$3], [type])>::from(b4_rhs_data([$1], [$2]))])],
+                        [ b4_rhs_data([$1], [$2])])])])
 
 
 # b4_lhs_location()
